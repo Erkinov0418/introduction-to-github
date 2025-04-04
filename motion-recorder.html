@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Автоматическая запись при движении | GTA.Hub</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .video-container {
+            position: relative;
+            margin: 20px 0;
+        }
+        video {
+            width: 100%;
+            background-color: #222;
+            border-radius: 4px;
+        }
+        canvas {
+            display: none;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+        }
+        button.stop {
+            background-color: #f44336;
+        }
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .recordings {
+            margin-top: 30px;
+        }
+        .recording-item {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Автоматическая запись при движении</h1>
+        
+        <div class="video-container">
+            <video id="video" playsinline autoplay></video>
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <div class="status" id="status">Камера не активна</div>
+        
+        <div class="controls">
+            <button id="startBtn">Запустить камеру</button>
+            <button id="recordBtn" disabled>Начать запись</button>
+            <button id="stopBtn" class="stop" disabled>Остановить</button>
+        </div>
+        
+        <div class="recordings" id="recordings">
+            <h3>Сохраненные записи:</h3>
+            <!-- Здесь будут появляться записи -->
+        </div>
+    </div>
+
+    <script>
+        // Элементы DOM
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startBtn = document.getElementById('startBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const status = document.getElementById('status');
+        const recordings = document.getElementById('recordings');
+        
+        // Переменные состояния
+        let stream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let motionDetected = false;
+        let isRecording = false;
+        let lastFrame = null;
+        let motionCheckInterval = null;
+        let sensitivity = 30; // Чувствительность к движению (1-100)
+        
+        // Запуск камеры
+        startBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 1280, 
+                        height: 720,
+                        facingMode: 'environment'
+                    },
+                    audio: true 
+                });
+                video.srcObject = stream;
+                status.textContent = 'Камера активна - ожидание движения...';
+                startBtn.disabled = true;
+                recordBtn.disabled = false;
+                
+                // Начинаем проверку на движение
+                motionCheckInterval = setInterval(checkForMotion, 200);
+            } catch (err) {
+                console.error('Ошибка доступа к камере:', err);
+                status.textContent = 'Ошибка: ' + err.message;
+            }
+        });
+        
+        // Проверка на движение
+        function checkForMotion() {
+            if (!stream) return;
+            
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const currentFrame = context.getImageData(0, 0, canvas.width, canvas.height);
+            
+            if (lastFrame) {
+                const diff = compareFrames(lastFrame, currentFrame, canvas.width, canvas.height);
+                
+                if (diff > sensitivity && !isRecording) {
+                    motionDetected = true;
+                    status.textContent = 'Обнаружено движение! Начинаю запись...';
+                    startRecording();
+                } else if (diff > sensitivity && isRecording) {
+                    status.textContent = 'Запись: обнаружено движение';
+                }
+            }
+            
+            lastFrame = currentFrame;
+        }
+        
+        // Сравнение кадров
+        function compareFrames(frame1, frame2, width, height) {
+            let diff = 0;
+            const length = width * height * 4;
+            
+            for (let i = 0; i < length; i += 4) {
+                // Сравниваем только яркость (R+G+B)/3
+                const val1 = (frame1.data[i] + frame1.data[i+1] + frame1.data[i+2]) / 3;
+                const val2 = (frame2.data[i] + frame2.data[i+1] + frame2.data[i+2]) / 3;
+                diff += Math.abs(val1 - val2);
+            }
+            
+            return diff / (width * height);
+        }
+        
+        // Начало записи
+        function startRecording() {
+            if (isRecording) return;
+            
+            recordedChunks = [];
+            const options = { mimeType: 'video/webm; codecs=vp9' };
+            
+            try {
+                mediaRecorder = new MediaRecorder(stream, options);
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    saveRecording();
+                    isRecording = false;
+                    stopBtn.disabled = true;
+                    recordBtn.disabled = false;
+                    status.textContent = 'Камера активна - ожидание движения...';
+                };
+                
+                mediaRecorder.start(100); // Собираем данные каждые 100мс
+                isRecording = true;
+                stopBtn.disabled = false;
+                recordBtn.disabled = true;
+                status.textContent = 'Идет запись...';
+            } catch (err) {
+                console.error('Ошибка записи:', err);
+                status.textContent = 'Ошибка записи: ' + err.message;
+            }
+        }
+        
+        // Сохранение записи
+        function saveRecording() {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const recordingName = `recording-${timestamp}.webm`;
+            
+            const recordingItem = document.createElement('div');
+            recordingItem.className = 'recording-item';
+            recordingItem.innerHTML = `
+                <p>Запись от ${new Date().toLocaleString()}</p>
+                <video controls src="${url}" width="100%"></video>
+                <a href="${url}" download="${recordingName}" style="display: block; margin-top: 5px;">
+                    <button>Скачать</button>
+                </a>
+            `;
+            
+            recordings.appendChild(recordingItem);
+        }
+        
+        // Остановка записи
+        stopBtn.addEventListener('click', () => {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                motionDetected = false;
+            }
+        });
+        
+        // Остановка всего
+        window.addEventListener('beforeunload', () => {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            if (motionCheckInterval) {
+                clearInterval(motionCheckInterval);
+            }
+        });
+    </script>
+</body>
+</html>
