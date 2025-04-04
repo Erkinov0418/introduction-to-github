@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Venetka Video</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #image {
+            width: 100%;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        h1 {
+            color: #333;
+        }
+        p {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Venetka Videosi</h1>
+        <p>Rasmga kamerani tuting yoki ustiga bosing, video avtomatik ochiladi.</p>
+        <img id="image" src="venetka.jpg" alt="Venetka Rasm" onclick="playVideo()">
+    </div>
+    <script>
+        function playVideo() {
+            window.location.href = "https://www.youtube.com/watch?v=EXAMPLE_VIDEO_ID"; // Videoning haqiqiy URL manzilini yozing
+        }
+    </script>
+</body>
+</html>
